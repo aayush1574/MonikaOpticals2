@@ -55,6 +55,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const descEl = document.getElementById('col-desc');
   const filterBtns = document.querySelectorAll('.col-filter-btn');
 
+  // Load products: prefer localStorage (admin edits) over hardcoded defaults
+  let activeProducts = PRODUCTS;
+  const stored = localStorage.getItem('monika_opticals_products');
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed) && parsed.length > 0) activeProducts = parsed;
+    } catch (e) { /* fall back to hardcoded */ }
+  }
+
   // Read category from URL
   const params = new URLSearchParams(window.location.search);
   let currentCat = params.get('cat') || 'all';
@@ -85,7 +95,8 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function renderProducts(cat) {
-    const filtered = cat === 'all' ? PRODUCTS : PRODUCTS.filter(p => p.category === cat);
+    const filtered = cat === 'all' ? activeProducts : activeProducts.filter(p => p.category === cat);
+
 
     grid.innerHTML = '';
 
