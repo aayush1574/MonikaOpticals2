@@ -57,7 +57,14 @@ const CATEGORY_LABELS = {
    ══════════════════════════════════════════════════════════ */
 let products = [];
 let deleteTargetId = null;
-let currentImageData = null; // holds base64 or path for the modal form
+let currentImages = []; // array of base64 or path strings for the modal form
+
+/* Helper: get images array from product (backward compat) */
+function getProductImages(product) {
+  if (Array.isArray(product.images) && product.images.length > 0) return product.images;
+  if (product.image) return [product.image];
+  return [];
+}
 
 /* ══════════════════════════════════════════════════════════
    INIT
@@ -239,11 +246,16 @@ function renderTable() {
       ? `<span class="admin-badge">${product.badge}</span>`
       : '<span class="admin-text-muted">—</span>';
 
+    const imgs = getProductImages(product);
+    const primaryImg = imgs[0] || '';
+    const imgCountBadge = imgs.length > 1 ? `<span class="admin-img-count">${imgs.length}</span>` : '';
+
     return `
       <tr data-id="${product.id}">
         <td>
           <div class="admin-table-img">
-            <img src="${product.image}" alt="${product.name}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23EDE9E3%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2255%22 text-anchor=%22middle%22 fill=%22%23999%22 font-size=%2240%22>👓</text></svg>'" />
+            ${imgCountBadge}
+            <img src="${primaryImg}" alt="${product.name}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23EDE9E3%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2255%22 text-anchor=%22middle%22 fill=%22%23999%22 font-size=%2240%22>👓</text></svg>'" />
           </div>
         </td>
         <td><strong>${product.name}</strong></td>
@@ -286,16 +298,16 @@ function openProductModal(product = null) {
     document.getElementById('prod-badge').value = product.badge || '';
     document.getElementById('prod-features').value = product.features.join(', ');
 
-    // Show existing image
-    currentImageData = product.image;
-    showImagePreview(product.image);
+    // Load existing images
+    currentImages = [...getProductImages(product)];
+    renderThumbnails();
   } else {
     titleEl.textContent = 'Add Product';
     submitEl.textContent = 'Save Product';
     document.getElementById('product-form').reset();
     document.getElementById('edit-product-id').value = '';
-    currentImageData = null;
-    hideImagePreview();
+    currentImages = [];
+    renderThumbnails();
   }
 
   overlay.classList.add('active');
@@ -310,8 +322,8 @@ function closeProductModal() {
   document.getElementById('product-modal-overlay').classList.remove('active');
   document.body.style.overflow = '';
   document.getElementById('product-form').reset();
-  currentImageData = null;
-  hideImagePreview();
+  currentImages = [];
+  renderThumbnails();
 }
 
 function handleFormSubmit(e) {
@@ -330,8 +342,8 @@ function handleFormSubmit(e) {
     return;
   }
 
-  if (!currentImageData) {
-    showToast('Please upload a product image.', 'error');
+  if (currentImages.length === 0) {
+    showToast('Please upload at least one product image.', 'error');
     return;
   }
 
@@ -347,9 +359,9 @@ function handleFormSubmit(e) {
         category,
         badge: badge || undefined,
         features,
-        image: currentImageData
+        image: currentImages[0],
+        images: [...currentImages]
       };
-      // Clean undefined badge
       if (!products[idx].badge) delete products[idx].badge;
     }
     showToast(`"${name}" updated successfully!`, 'success');
@@ -362,7 +374,8 @@ function handleFormSubmit(e) {
       brand,
       price,
       category,
-      image: currentImageData,
+      image: currentImages[0],
+      images: [...currentImages],
       features,
       ...(badge ? { badge } : {})
     });
@@ -454,7 +467,7 @@ function importData(e) {
 
       // Validate structure
       const valid = data.every(p =>
-        p.id && p.name && p.brand && p.price && p.category && p.image && Array.isArray(p.features)
+        p.id && p.name && p.brand && p.price && p.category && (p.image || (Array.isArray(p.images) && p.images.length > 0)) && Array.isArray(p.features)
       );
 
       if (!valid) throw new Error('Invalid product structure');
@@ -475,22 +488,23 @@ function importData(e) {
 }
 
 /* ══════════════════════════════════════════════════════════
-   IMAGE UPLOAD
+   IMAGE UPLOAD (Multi-Image)
    ══════════════════════════════════════════════════════════ */
 function setupImageUpload() {
   const dropzone = document.getElementById('dropzone');
   const fileInput = document.getElementById('prod-image');
-  const removeBtn = document.getElementById('remove-image');
 
   // Click to browse
-  dropzone.addEventListener('click', (e) => {
-    if (e.target.closest('.admin-dropzone__remove')) return;
+  dropzone.addEventListener('click', () => {
     fileInput.click();
   });
 
-  // File selected
+  // File selected (multiple)
   fileInput.addEventListener('change', () => {
-    if (fileInput.files[0]) processImage(fileInput.files[0]);
+    if (fileInput.files.length > 0) {
+      processMultipleImages(fileInput.files);
+      fileInput.value = '';
+    }
   });
 
   // Drag events
@@ -510,45 +524,61 @@ function setupImageUpload() {
 
   dropzone.addEventListener('drop', (e) => {
     e.preventDefault();
-    const file = e.dataTransfer.files[0];
-    if (file && file.type.startsWith('image/')) {
-      processImage(file);
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      processMultipleImages(files);
     }
-  });
-
-  // Remove image
-  removeBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    currentImageData = null;
-    hideImagePreview();
-    fileInput.value = '';
   });
 }
 
-function processImage(file) {
-  if (file.size > 2 * 1024 * 1024) {
-    showToast('Image is too large. Max 2MB allowed.', 'error');
+function processMultipleImages(files) {
+  const remaining = 6 - currentImages.length;
+  if (remaining <= 0) {
+    showToast('Maximum 6 images reached.', 'error');
     return;
   }
 
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    currentImageData = e.target.result;
-    showImagePreview(currentImageData);
-  };
-  reader.readAsDataURL(file);
+  const toProcess = Array.from(files).slice(0, remaining);
+  let processed = 0;
+
+  toProcess.forEach(file => {
+    if (!file.type.startsWith('image/')) return;
+    if (file.size > 2 * 1024 * 1024) {
+      showToast(`"${file.name}" is too large (max 2MB).`, 'error');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      currentImages.push(e.target.result);
+      processed++;
+      if (processed >= toProcess.length) {
+        renderThumbnails();
+      }
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
-function showImagePreview(src) {
-  document.getElementById('dropzone-content').style.display = 'none';
-  document.getElementById('dropzone-preview').style.display = 'flex';
-  document.getElementById('preview-img').src = src;
+function renderThumbnails() {
+  const grid = document.getElementById('thumbs-grid');
+  if (currentImages.length === 0) {
+    grid.innerHTML = '';
+    return;
+  }
+
+  grid.innerHTML = currentImages.map((img, i) => `
+    <div class="admin-thumb" data-index="${i}">
+      <img src="${img}" alt="Image ${i + 1}" />
+      ${i === 0 ? '<span class="admin-thumb__primary">Primary</span>' : ''}
+      <button type="button" class="admin-thumb__remove" onclick="removeImage(${i})">&times;</button>
+    </div>
+  `).join('');
 }
 
-function hideImagePreview() {
-  document.getElementById('dropzone-content').style.display = 'flex';
-  document.getElementById('dropzone-preview').style.display = 'none';
-  document.getElementById('preview-img').src = '';
+function removeImage(index) {
+  currentImages.splice(index, 1);
+  renderThumbnails();
 }
 
 /* ══════════════════════════════════════════════════════════

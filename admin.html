@@ -168,20 +168,19 @@
           </div>
         </div>
 
-        <!-- Image Upload -->
+        <!-- Image Upload (Multiple) -->
         <div class="admin-input-group">
-          <label>Product Image *</label>
+          <label>Product Images * <small style="color:rgba(255,255,255,0.3);font-weight:400;">(first = primary, drag to reorder)</small></label>
           <div class="admin-dropzone" id="dropzone">
-            <input type="file" id="prod-image" accept="image/*" />
+            <input type="file" id="prod-image" accept="image/*" multiple />
             <div class="admin-dropzone__content" id="dropzone-content">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-              <p>Drag & drop image here or <span>browse</span></p>
-              <small>PNG, JPG — max 2MB</small>
+              <p>Drag & drop images here or <span>browse</span></p>
+              <small>PNG, JPG — max 2MB each, up to 6 images</small>
             </div>
-            <div class="admin-dropzone__preview" id="dropzone-preview" style="display:none;">
-              <img id="preview-img" alt="Preview" />
-              <button type="button" class="admin-dropzone__remove" id="remove-image">&times;</button>
-            </div>
+          </div>
+          <div class="admin-thumbs" id="thumbs-grid">
+            <!-- Thumbnails injected by JS -->
           </div>
         </div>
 

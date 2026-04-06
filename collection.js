@@ -97,13 +97,22 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderProducts(cat) {
     const filtered = cat === 'all' ? activeProducts : activeProducts.filter(p => p.category === cat);
 
-
     grid.innerHTML = '';
+
+    // Helper: get images array (backward compat)
+    function getImages(p) {
+      if (Array.isArray(p.images) && p.images.length > 0) return p.images;
+      if (p.image) return [p.image];
+      return [];
+    }
 
     filtered.forEach((product, i) => {
       const card = document.createElement('div');
       card.className = 'product-card reveal';
       card.style.transitionDelay = `${Math.min(i * 0.08, 0.5)}s`;
+
+      const imgs = getImages(product);
+      const primaryImg = imgs[0] || '';
 
       const badgeHTML = product.badge
         ? `<span class="product-card__badge">${product.badge}</span>`
@@ -113,12 +122,23 @@ document.addEventListener('DOMContentLoaded', () => {
         .map(f => `<span class="product-card__tag">${f}</span>`)
         .join('');
 
+      // Dot indicators for multi-image
+      let dotsHTML = '';
+      if (imgs.length > 1) {
+        dotsHTML = '<div class="product-card__dots">';
+        imgs.forEach((_, di) => {
+          dotsHTML += `<span class="product-card__dot${di === 0 ? ' active' : ''}" data-dot="${di}"></span>`;
+        });
+        dotsHTML += '</div>';
+      }
+
       const whatsappMsg = encodeURIComponent(`Hi, I'm interested in the ${product.name} (${product.brand}) - ${product.price}. Can I get more details?`);
 
       card.innerHTML = `
         <div class="product-card__image-wrap">
           ${badgeHTML}
-          <img src="${product.image}" alt="${product.name}" class="product-card__image" loading="lazy" />
+          <img src="${primaryImg}" alt="${product.name}" class="product-card__image" loading="lazy" />
+          ${dotsHTML}
         </div>
         <div class="product-card__body">
           <span class="product-card__brand">${product.brand}</span>
@@ -133,6 +153,20 @@ document.addEventListener('DOMContentLoaded', () => {
           </div>
         </div>
       `;
+
+      // Dot click handlers for image switching
+      if (imgs.length > 1) {
+        const dotsWrap = card.querySelector('.product-card__dots');
+        const imgEl = card.querySelector('.product-card__image');
+        dotsWrap.addEventListener('click', (e) => {
+          const dot = e.target.closest('.product-card__dot');
+          if (!dot) return;
+          const idx = parseInt(dot.dataset.dot);
+          imgEl.src = imgs[idx];
+          dotsWrap.querySelectorAll('.product-card__dot').forEach(d => d.classList.remove('active'));
+          dot.classList.add('active');
+        });
+      }
 
       grid.appendChild(card);
     });
