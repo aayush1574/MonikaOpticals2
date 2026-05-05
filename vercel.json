@@ -1,12 +1,25 @@
 {
   "version": 2,
-  "public": true,
-  "cleanUrls": true,
-  "trailingSlash": false,
+  "builds": [
+    { "src": "index.html", "use": "@vercel/static" },
+    { "src": "admin.html", "use": "@vercel/static" },
+    { "src": "collection.html", "use": "@vercel/static" },
+    { "src": "*.js", "use": "@vercel/static" },
+    { "src": "*.css", "use": "@vercel/static" },
+    { "src": "images/**", "use": "@vercel/static" }
+  ],
   "rewrites": [
     {
       "source": "/api/:path*",
       "destination": "https://monikaopticals2-cakb.onrender.com/api/:path*"
+    },
+    {
+      "source": "/admin",
+      "destination": "/admin.html"
+    },
+    {
+      "source": "/collection",
+      "destination": "/collection.html"
     }
   ]
 }
