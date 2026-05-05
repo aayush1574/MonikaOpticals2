@@ -1,24 +1,32 @@
 /**
  * Monika Opticals - API Configuration
- * Robust configuration that works in multiple inclusion scenarios.
+ * Pure ES5 version for maximum compatibility.
  */
 var API_CONFIG = (function() {
-  const BACKEND_URL = 'https://monikaopticals2-cakb.onrender.com';
+  var BACKEND_URL = 'https://monikaopticals2-nr5i.onrender.com';
 
   return {
     BASE_URL: BACKEND_URL,
-    api: (path) => `${BACKEND_URL}${path.startsWith('/') ? '' : '/'}${path}`,
-    imageUrl: (src) => {
+    api: function(path) {
+      var separator = (path.charAt(0) === '/') ? '' : '/';
+      return BACKEND_URL + separator + path;
+    },
+    imageUrl: function(src) {
       if (!src) return '';
-      if (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('data:') || src.startsWith('images/')) {
+      // If it's already a full URL or data URI, return as is
+      if (src.indexOf('http://') === 0 || 
+          src.indexOf('https://') === 0 || 
+          src.indexOf('data:') === 0 || 
+          src.indexOf('images/') === 0) {
         return src;
       }
-      return `${BACKEND_URL}${src.startsWith('/') ? '' : '/'}${src}`;
+      var separator = (src.charAt(0) === '/') ? '' : '/';
+      return BACKEND_URL + separator + src;
     }
   };
 })();
 
-// Ensure it's globally accessible even if included as a module
+// Ensure it's globally accessible
 if (typeof window !== 'undefined') {
   window.API_CONFIG = API_CONFIG;
 }
