@@ -70,8 +70,9 @@ app.get('/api/debug-supabase', async (req, res) => {
     const results = {
       config: {
         hasUrl: !!supabaseUrl,
+        urlPreview: supabaseUrl ? supabaseUrl.substring(0, 20) + '...' : 'none',
         hasKey: !!supabaseKey,
-        isServiceRole: !!process.env.SUPABASE_SERVICE_ROLE_KEY
+        keyType: process.env.SUPABASE_SERVICE_ROLE_KEY ? 'Service Role' : (process.env.SUPABASE_ANON_KEY ? 'Anon' : 'None')
       },
       storage: {},
       database: {}
@@ -79,26 +80,37 @@ app.get('/api/debug-supabase', async (req, res) => {
 
     // Check Storage
     const { data: buckets, error: bErr } = await supabase.storage.listBuckets();
-    if (bErr) results.storage.error = bErr.message;
-    else {
+    if (bErr) {
+      results.storage.error = bErr.message;
+      results.storage.status = 'FAIL';
+    } else {
       results.storage.buckets = buckets.map(b => b.name);
       results.storage.hasRequiredBucket = buckets.some(b => b.name === 'monika-opticals');
+      results.storage.status = 'OK';
     }
 
-    // Check Database
-    const { error: tErr } = await supabase.from('products').select('id').limit(1);
-    if (tErr) results.database.productsTable = tErr.message;
-    else results.database.productsTable = 'OK';
+    // Check Database - Products
+    const { data: pData, error: tErr } = await supabase.from('products').select('count', { count: 'exact', head: true });
+    if (tErr) {
+      results.database.productsTable = { status: 'FAIL', error: tErr.message, hint: tErr.hint };
+    } else {
+      results.database.productsTable = { status: 'OK', count: pData };
+    }
 
-    const { error: btErr } = await supabase.from('banners').select('id').limit(1);
-    if (btErr) results.database.bannersTable = btErr.message;
-    else results.database.bannersTable = 'OK';
+    // Check Database - Banners
+    const { data: bData, error: btErr } = await supabase.from('banners').select('count', { count: 'exact', head: true });
+    if (btErr) {
+      results.database.bannersTable = { status: 'FAIL', error: btErr.message, hint: btErr.hint };
+    } else {
+      results.database.bannersTable = { status: 'OK', count: bData };
+    }
 
     res.json(results);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message, stack: err.stack });
   }
 });
+
 
 /* ── Multer Storage (In-Memory) ── */
 const storage = multer.memoryStorage();
