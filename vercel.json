@@ -1,6 +1,8 @@
 {
-  "buildCommand": "echo done",
-  "outputDirectory": ".",
+  "version": 2,
+  "public": true,
+  "cleanUrls": true,
+  "trailingSlash": false,
   "rewrites": [
     {
       "source": "/api/:path*",

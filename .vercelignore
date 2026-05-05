@@ -1,5 +1,10 @@
 node_modules/
-
+server.js
+package.json
+package-lock.json
+.env
+.gitignore
+hostinger_deploy/
 test_upload.js
 test.js
 test.py
@@ -10,3 +15,4 @@ check_vercel_now.js
 diagnose.js
 data/
 uploads/
+
