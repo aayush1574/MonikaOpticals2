@@ -6,10 +6,7 @@
    ═══════════════════════════════════════════════════════════════ */
 
 
-// ═══════════════════════════════════════════════════════════════
-// ADMIN CONFIGURATION
-// ═══════════════════════════════════════════════════════════════
-const ADMIN_PASSWORD = 'monika1980';
+// Password is now verified on the backend for security.
 
 
 const CATEGORY_LABELS = {
@@ -107,15 +104,38 @@ function switchTab(tabName) {
 /* ══════════════════════════════════════════════════════════
    AUTH
    ══════════════════════════════════════════════════════════ */
-function handleLogin() {
+async function handleLogin() {
   const pwd = document.getElementById('admin-password').value;
-  if (pwd === ADMIN_PASSWORD) {
-    sessionStorage.setItem('monika_admin_auth', 'true');
-    showDashboard();
-  } else {
-    document.getElementById('login-error').textContent = 'Incorrect password. Try again.';
+  const loginBtn = document.getElementById('login-btn');
+  
+  try {
+    loginBtn.disabled = true;
+    loginBtn.innerHTML = 'Verifying...';
+    
+    const res = await fetch(API_CONFIG.api('/api/login'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pwd })
+    });
+    
+    const data = await res.json();
+    
+    if (data.success) {
+      sessionStorage.setItem('monika_admin_auth', 'true');
+      showDashboard();
+    } else {
+      throw new Error(data.message || 'Incorrect password');
+    }
+  } catch (err) {
+    document.getElementById('login-error').textContent = err.message || 'Login failed. Try again.';
     document.getElementById('admin-password').classList.add('shake');
     setTimeout(() => document.getElementById('admin-password').classList.remove('shake'), 500);
+  } finally {
+    loginBtn.disabled = false;
+    loginBtn.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      Unlock Dashboard
+    `;
   }
 }
 

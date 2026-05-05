@@ -51,6 +51,19 @@ app.get('/', (req, res) => {
   });
 });
 
+/* ── Auth Route ── */
+app.post('/api/login', (req, res) => {
+  const { password } = req.body;
+  const adminPassword = process.env.ADMIN_PASSWORD || 'monika1980'; // Fallback for safety during transition
+  
+  if (password === adminPassword) {
+    res.json({ success: true });
+  } else {
+    res.status(401).json({ success: false, message: 'Incorrect password' });
+  }
+});
+
+
 /* ── Debug Route ── */
 app.get('/api/debug-supabase', async (req, res) => {
   try {
