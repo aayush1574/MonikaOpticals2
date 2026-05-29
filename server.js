@@ -1,28 +1,32 @@
 /* ═══════════════════════════════════════════════════════════════
-   Monika Opticals — Express Backend Server (Supabase Version)
+   Monika Opticals — Express Backend Server (MySQL Version)
    Full CRUD API for Products & Banners
-   Permanent Storage: Supabase (PostgreSQL) + Supabase Storage
+   Permanent Storage: MySQL + Local Disk Storage
    ═══════════════════════════════════════════════════════════════ */
 
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
-const { createClient } = require('@supabase/supabase-js');
+const mysql = require('mysql2/promise');
+const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-/* ── Supabase Configuration ── */
-const supabaseUrl = process.env.SUPABASE_URL ? process.env.SUPABASE_URL.trim() : undefined;
-const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '').trim();
+/* ── MySQL Configuration ── */
+const pool = mysql.createPool({
+  host: process.env.DB_HOST || 'localhost',
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD || '',
+  database: process.env.DB_NAME || 'monika_opticals',
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0
+});
 
-if (!supabaseUrl || !supabaseKey) {
-  console.error('  ❌ CRITICAL: Missing SUPABASE_URL or SUPABASE_KEY in environment variables!');
-}
-
-const supabase = createClient(supabaseUrl, supabaseKey);
-console.log('  🍀 Initialized Supabase Client');
+console.log('  🍀 Initialized MySQL Connection Pool');
 
 /* ── Middleware ── */
 app.use(cors({
@@ -38,6 +42,13 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.set('json spaces', 2);
 
+/* Serve Uploaded Files */
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 app.use((req, res, next) => {
   console.log(`  → ${req.method} ${req.path}`);
   next();
@@ -45,78 +56,50 @@ app.use((req, res, next) => {
 
 app.get('/', (req, res) => {
   res.json({ 
-    message: 'Backend is running with Supabase',
-    supabaseConnected: !!supabaseUrl,
-    debug: '/api/debug-supabase'
+    message: 'Backend is running with MySQL',
+    debug: '/api/debug-db'
   });
 });
 
 /* ── Debug Route ── */
-app.get('/api/debug-supabase', async (req, res) => {
+app.get('/api/debug-db', async (req, res) => {
   try {
-    const results = {
-      config: {
-        hasUrl: !!supabaseUrl,
-        hasKey: !!supabaseKey,
-        isServiceRole: !!process.env.SUPABASE_SERVICE_ROLE_KEY
-      },
-      storage: {},
-      database: {}
-    };
-
-    // Check Storage
-    const { data: buckets, error: bErr } = await supabase.storage.listBuckets();
-    if (bErr) results.storage.error = bErr.message;
-    else {
-      results.storage.buckets = buckets.map(b => b.name);
-      results.storage.hasRequiredBucket = buckets.some(b => b.name === 'monika-opticals');
-    }
-
-    // Check Database
-    const { error: tErr } = await supabase.from('products').select('id').limit(1);
-    if (tErr) results.database.productsTable = tErr.message;
-    else results.database.productsTable = 'OK';
-
-    const { error: btErr } = await supabase.from('banners').select('id').limit(1);
-    if (btErr) results.database.bannersTable = btErr.message;
-    else results.database.bannersTable = 'OK';
-
-    res.json(results);
+    const [rows] = await pool.query('SELECT 1 + 1 AS solution');
+    res.json({ status: 'OK', message: 'Database connection successful', testQuery: rows[0].solution });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-/* ── Multer Storage (In-Memory) ── */
-const storage = multer.memoryStorage();
+/* ── Multer Storage (Local Disk) ── */
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    // Define folders for products vs banners based on route
+    let folder = 'uploads/';
+    if (req.path.includes('banners')) folder += 'banners/';
+    else folder += 'products/';
+    
+    const fullPath = path.join(__dirname, folder);
+    if (!fs.existsSync(fullPath)) {
+      fs.mkdirSync(fullPath, { recursive: true });
+    }
+    cb(null, fullPath);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + '-' + file.originalname.replace(/[^a-zA-Z0-9.]/g, '_'));
+  }
+});
+
 const upload = multer({ 
   storage: storage,
   limits: { fileSize: 10 * 1024 * 1024 } 
 });
 
-/* ── Helper: Upload to Supabase Storage ── */
-async function uploadToSupabase(file, bucketName, folder) {
-  if (!file) return '';
-  
-  const fileName = `${folder}/${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-  
-  const { data, error } = await supabase.storage
-    .from(bucketName)
-    .upload(fileName, file.buffer, {
-      contentType: file.mimetype,
-      upsert: true
-    });
-
-  if (error) {
-    console.error(`  ❌ Supabase Storage Error [Bucket: ${bucketName}]:`, error.message);
-    throw new Error(`Upload failed for "${file.originalname}": ${error.message}`);
-  }
-
-  const { data: { publicUrl } } = supabase.storage
-    .from(bucketName)
-    .getPublicUrl(fileName);
-
-  return publicUrl;
+/* Helper to get public URL for local files */
+function getPublicUrl(req, file) {
+  let folder = req.path.includes('banners') ? 'banners' : 'products';
+  return `${req.protocol}://${req.get('host')}/uploads/${folder}/${file.filename}`;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -125,13 +108,8 @@ async function uploadToSupabase(file, bucketName, folder) {
 
 app.get('/api/products', async (req, res) => {
   try {
-    const { data, error } = await supabase
-      .from('products')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-    res.json(data);
+    const [rows] = await pool.query('SELECT * FROM products ORDER BY created_at DESC');
+    res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -142,11 +120,7 @@ app.post('/api/products', upload.array('images', 6), async (req, res) => {
     const body = req.body;
     const files = req.files || [];
     
-    const category = body.category ? body.category.toLowerCase().replace(/[^a-z0-9]/g, '_') : 'uncategorized';
-    
-    const uploadedImages = await Promise.all(
-      files.map(file => uploadToSupabase(file, 'monika-opticals', `products/${category}`))
-    );
+    const uploadedImages = files.map(file => getPublicUrl(req, file));
     
     let existingImages = [];
     if (body.existingImages) {
@@ -156,44 +130,29 @@ app.post('/api/products', upload.array('images', 6), async (req, res) => {
     const allImages = [...existingImages, ...uploadedImages];
     const prodId = body.id || ('prod-' + Date.now().toString(36));
 
-    const productData = {
-      id: prodId,
-      name: body.name,
-      brand: body.brand,
-      price: body.price,
-      category: body.category,
-      features: body.features ? (typeof body.features === 'string' ? JSON.parse(body.features) : body.features) : [],
-      badge: body.badge || '',
-      colors: body.colors ? (typeof body.colors === 'string' ? JSON.parse(body.colors) : body.colors) : [],
-      images: allImages,
-      image: allImages[0] || '',
-      visible: body.visible !== undefined ? (body.visible === 'true' || body.visible === true) : true
-    };
+    const features = body.features ? (typeof body.features === 'string' ? JSON.parse(body.features) : body.features) : [];
+    const colors = body.colors ? (typeof body.colors === 'string' ? JSON.parse(body.colors) : body.colors) : [];
+    const visible = body.visible !== undefined ? (body.visible === 'true' || body.visible === true) : true;
 
-    // Ensure these are arrays for Supabase JSONB columns
-    const finalFeatures = Array.isArray(productData.features) ? productData.features : [];
-    const finalColors = Array.isArray(productData.colors) ? productData.colors : [];
-    const finalImages = Array.isArray(allImages) ? allImages : [];
+    await pool.query(`
+      INSERT INTO products (id, name, brand, price, category, features, badge, colors, images, image, visible)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      prodId,
+      body.name,
+      body.brand,
+      body.price,
+      body.category,
+      JSON.stringify(features),
+      body.badge || '',
+      JSON.stringify(colors),
+      JSON.stringify(allImages),
+      allImages[0] || '',
+      visible
+    ]);
 
-    const cleanProductData = {
-      ...productData,
-      features: finalFeatures,
-      colors: finalColors,
-      images: finalImages,
-      image: finalImages[0] || ''
-    };
-
-    const { data, error } = await supabase
-      .from('products')
-      .insert([cleanProductData])
-      .select();
-
-    if (error) {
-      console.error('  ❌ Database Insert Error:', error.message);
-      throw new Error(`Database error: ${error.message}`);
-    }
-
-    res.json({ ok: true, product: data[0] });
+    const [rows] = await pool.query('SELECT * FROM products WHERE id = ?', [prodId]);
+    res.json({ ok: true, product: rows[0] });
   } catch (err) {
     console.error('  ❌ POST /api/products error:', err.message);
     res.status(500).json({ error: err.message });
@@ -204,9 +163,7 @@ app.put('/api/products/:id', upload.array('images', 6), async (req, res) => {
   try {
     const body = req.body;
     const files = req.files || [];
-    const uploadedImages = await Promise.all(
-      files.map(file => uploadToSupabase(file, 'monika-opticals', 'products'))
-    );
+    const uploadedImages = files.map(file => getPublicUrl(req, file));
 
     let existingImages = [];
     if (body.existingImages) {
@@ -215,29 +172,38 @@ app.put('/api/products/:id', upload.array('images', 6), async (req, res) => {
 
     const allImages = [...existingImages, ...uploadedImages];
 
-    const updateData = {
-      name: body.name,
-      brand: body.brand,
-      price: body.price,
-      category: body.category,
-      features: body.features ? (typeof body.features === 'string' ? JSON.parse(body.features) : body.features) : undefined,
-      badge: body.badge,
-      colors: body.colors ? (typeof body.colors === 'string' ? JSON.parse(body.colors) : body.colors) : undefined,
-      images: allImages.length > 0 ? allImages : undefined,
-      image: allImages.length > 0 ? allImages[0] : undefined,
-      visible: body.visible !== undefined ? (body.visible === 'true' || body.visible === true) : undefined
-    };
+    const updates = [];
+    const params = [];
 
-    Object.keys(updateData).forEach(key => updateData[key] === undefined && delete updateData[key]);
+    if (body.name !== undefined) { updates.push('name = ?'); params.push(body.name); }
+    if (body.brand !== undefined) { updates.push('brand = ?'); params.push(body.brand); }
+    if (body.price !== undefined) { updates.push('price = ?'); params.push(body.price); }
+    if (body.category !== undefined) { updates.push('category = ?'); params.push(body.category); }
+    if (body.features !== undefined) { 
+      updates.push('features = ?'); 
+      params.push(JSON.stringify(typeof body.features === 'string' ? JSON.parse(body.features) : body.features)); 
+    }
+    if (body.badge !== undefined) { updates.push('badge = ?'); params.push(body.badge); }
+    if (body.colors !== undefined) { 
+      updates.push('colors = ?'); 
+      params.push(JSON.stringify(typeof body.colors === 'string' ? JSON.parse(body.colors) : body.colors)); 
+    }
+    if (allImages.length > 0) { 
+      updates.push('images = ?'); params.push(JSON.stringify(allImages)); 
+      updates.push('image = ?'); params.push(allImages[0]);
+    }
+    if (body.visible !== undefined) { 
+      updates.push('visible = ?'); 
+      params.push(body.visible === 'true' || body.visible === true); 
+    }
 
-    const { data, error } = await supabase
-      .from('products')
-      .update(updateData)
-      .eq('id', req.params.id)
-      .select();
+    if (updates.length > 0) {
+      params.push(req.params.id);
+      await pool.query(`UPDATE products SET ${updates.join(', ')} WHERE id = ?`, params);
+    }
 
-    if (error) throw error;
-    res.json({ ok: true, product: data[0] });
+    const [rows] = await pool.query('SELECT * FROM products WHERE id = ?', [req.params.id]);
+    res.json({ ok: true, product: rows[0] });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -245,12 +211,7 @@ app.put('/api/products/:id', upload.array('images', 6), async (req, res) => {
 
 app.patch('/api/products/:id/visibility', async (req, res) => {
   try {
-    const { error } = await supabase
-      .from('products')
-      .update({ visible: req.body.visible })
-      .eq('id', req.params.id);
-
-    if (error) throw error;
+    await pool.query('UPDATE products SET visible = ? WHERE id = ?', [req.body.visible, req.params.id]);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -259,12 +220,7 @@ app.patch('/api/products/:id/visibility', async (req, res) => {
 
 app.delete('/api/products/:id', async (req, res) => {
   try {
-    const { error } = await supabase
-      .from('products')
-      .delete()
-      .eq('id', req.params.id);
-
-    if (error) throw error;
+    await pool.query('DELETE FROM products WHERE id = ?', [req.params.id]);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -274,10 +230,20 @@ app.delete('/api/products/:id', async (req, res) => {
 app.post('/api/products/bulk', async (req, res) => {
   try {
     const products = req.body;
-    await supabase.from('products').delete().neq('id', '_');
-    const { data, error } = await supabase.from('products').insert(products).select();
-    if (error) throw error;
-    res.json({ ok: true, count: data.length });
+    await pool.query("DELETE FROM products WHERE id != '_'");
+    
+    for (const p of products) {
+      await pool.query(`
+        INSERT INTO products (id, name, brand, price, category, features, badge, colors, images, image, visible)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        p.id, p.name, p.brand, p.price, p.category, 
+        JSON.stringify(p.features), p.badge, JSON.stringify(p.colors), 
+        JSON.stringify(p.images), p.image, p.visible
+      ]);
+    }
+    
+    res.json({ ok: true, count: products.length });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -289,9 +255,8 @@ app.post('/api/products/bulk', async (req, res) => {
 
 app.get('/api/banners', async (req, res) => {
   try {
-    const { data, error } = await supabase.from('banners').select('*').order('created_at', { ascending: true });
-    if (error) throw error;
-    res.json(data);
+    const [rows] = await pool.query('SELECT * FROM banners ORDER BY created_at ASC');
+    res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -301,33 +266,41 @@ app.post('/api/banners', upload.single('image'), async (req, res) => {
   try {
     let imageSrc = '';
     if (req.file) {
-      imageSrc = await uploadToSupabase(req.file, 'monika-opticals', 'banners');
+      imageSrc = getPublicUrl(req, file);
     } else if (req.body.src) {
       imageSrc = req.body.src;
     }
 
-    const bannerData = {
-      id: 'b-' + Date.now().toString(36),
-      src: imageSrc,
-      alt: req.body.alt || 'Banner Image',
-      visible: true
-    };
+    const bannerId = 'b-' + Date.now().toString(36);
+    const visible = req.body.visible !== undefined ? req.body.visible : true;
 
-    const { data, error } = await supabase.from('banners').insert([bannerData]).select();
-    if (error) {
-      console.error('  ❌ Banner Insert Error:', error.message);
-      throw new Error(`Banner Database Error: ${error.message}`);
-    }
-    res.json({ ok: true, banner: data[0] });
+    await pool.query(`
+      INSERT INTO banners (id, src, alt, visible)
+      VALUES (?, ?, ?, ?)
+    `, [bannerId, imageSrc, req.body.alt || 'Banner Image', visible]);
+
+    const [rows] = await pool.query('SELECT * FROM banners WHERE id = ?', [bannerId]);
+    res.json({ ok: true, banner: rows[0] });
   } catch (err) {
+    console.error('  ❌ Banner Insert Error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
 app.put('/api/banners/:id', async (req, res) => {
   try {
-    const { error } = await supabase.from('banners').update(req.body).eq('id', req.params.id);
-    if (error) throw error;
+    const updates = [];
+    const params = [];
+
+    if (req.body.src !== undefined) { updates.push('src = ?'); params.push(req.body.src); }
+    if (req.body.alt !== undefined) { updates.push('alt = ?'); params.push(req.body.alt); }
+    if (req.body.visible !== undefined) { updates.push('visible = ?'); params.push(req.body.visible); }
+
+    if (updates.length > 0) {
+      params.push(req.params.id);
+      await pool.query(`UPDATE banners SET ${updates.join(', ')} WHERE id = ?`, params);
+    }
+
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -336,8 +309,7 @@ app.put('/api/banners/:id', async (req, res) => {
 
 app.delete('/api/banners/:id', async (req, res) => {
   try {
-    const { error } = await supabase.from('banners').delete().eq('id', req.params.id);
-    if (error) throw error;
+    await pool.query('DELETE FROM banners WHERE id = ?', [req.params.id]);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -350,8 +322,8 @@ app.delete('/api/banners/:id', async (req, res) => {
 
 app.get('/api/export', async (req, res) => {
   try {
-    const { data: products } = await supabase.from('products').select('*');
-    const { data: banners } = await supabase.from('banners').select('*');
+    const [products] = await pool.query('SELECT * FROM products');
+    const [banners] = await pool.query('SELECT * FROM banners');
     res.json({ products, banners, exportedAt: new Date().toISOString() });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -361,14 +333,31 @@ app.get('/api/export', async (req, res) => {
 app.post('/api/import', async (req, res) => {
   try {
     const { products, banners } = req.body;
-    if (Array.isArray(products)) {
-      await supabase.from('products').delete().neq('id', '_');
-      await supabase.from('products').insert(products);
+    
+    if (Array.isArray(products) && products.length > 0) {
+      await pool.query("DELETE FROM products WHERE id != '_'");
+      for (const p of products) {
+        await pool.query(`
+          INSERT INTO products (id, name, brand, price, category, features, badge, colors, images, image, visible)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          p.id, p.name, p.brand, p.price, p.category, 
+          JSON.stringify(p.features), p.badge, JSON.stringify(p.colors), 
+          JSON.stringify(p.images), p.image, p.visible
+        ]);
+      }
     }
-    if (Array.isArray(banners)) {
-      await supabase.from('banners').delete().neq('id', '_');
-      await supabase.from('banners').insert(banners);
+    
+    if (Array.isArray(banners) && banners.length > 0) {
+      await pool.query("DELETE FROM banners WHERE id != '_'");
+      for (const b of banners) {
+        await pool.query(`
+          INSERT INTO banners (id, src, alt, visible)
+          VALUES (?, ?, ?, ?)
+        `, [b.id, b.src, b.alt, b.visible]);
+      }
     }
+    
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -376,5 +365,5 @@ app.post('/api/import', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`  🚀 Server running on port ${PORT} with Robust Supabase Handling`);
+  console.log(`  🚀 Server running on port ${PORT} with MySQL Database`);
 });
