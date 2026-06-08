@@ -56,23 +56,48 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// Auto-heal symlink in production to resolve Apache/Nginx static intercept issues
+// Auto-heal symlinks for products & banners subfolders in production
 if (fs.existsSync('/home/u447214693/domains/monikaopticals.com')) {
-  const targetLink = path.join(__dirname, 'uploads');
-  try {
-    if (fs.existsSync(targetLink)) {
-      const lstat = fs.lstatSync(targetLink);
-      if (!lstat.isSymbolicLink()) {
-        fs.rmSync(targetLink, { recursive: true, force: true });
+  const uploadsRoot = path.join(__dirname, 'uploads');
+  // Ensure the parent directory public_html/uploads exists
+  if (!fs.existsSync(uploadsRoot)) {
+    try {
+      fs.mkdirSync(uploadsRoot, { recursive: true });
+    } catch(e) {}
+  }
+
+  const subfolders = ['products', 'banners'];
+  global.symlinkError = '';
+  
+  subfolders.forEach(sub => {
+    const targetLink = path.join(uploadsRoot, sub);
+    const targetFolder = path.join(HOSTINGER_PERSISTENT_DIR, sub);
+
+    // Ensure the persistent folder exists
+    if (!fs.existsSync(targetFolder)) {
+      try {
+        fs.mkdirSync(targetFolder, { recursive: true });
+      } catch(e) {}
+    }
+
+    try {
+      if (fs.existsSync(targetLink)) {
+        const lstat = fs.lstatSync(targetLink);
+        if (!lstat.isSymbolicLink()) {
+          fs.rmSync(targetLink, { recursive: true, force: true });
+        }
       }
+      if (!fs.existsSync(targetLink)) {
+        fs.symlinkSync(targetFolder, targetLink, 'dir');
+        console.log(`  🔗 Restored symlink from public_html/uploads/${sub} to persistent folder`);
+      }
+    } catch (err) {
+      console.error(`  ⚠️ Symlink creation failed for ${sub}:`, err.message);
+      global.symlinkError += `| ${sub}: ${err.message}`;
     }
-    if (!fs.existsSync(targetLink)) {
-      fs.symlinkSync(HOSTINGER_PERSISTENT_DIR, targetLink, 'dir');
-      console.log('  🔗 Restored symlink from public_html/uploads to persistent uploads folder');
-    }
-  } catch (err) {
-    console.error('  ⚠️ Symlink creation failed:', err.message);
-    global.symlinkError = err.message;
+  });
+  if (!global.symlinkError) {
+    global.symlinkError = 'None';
   }
 } else {
   global.symlinkError = 'Not on Hostinger';
