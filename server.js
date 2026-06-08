@@ -78,19 +78,43 @@ app.get('/api/debug-uploads', (req, res) => {
   try {
     const pPath = path.join(__dirname, 'uploads', 'products');
     const bPath = path.join(__dirname, 'uploads', 'banners');
-    const pExists = fs.existsSync(pPath);
-    const bExists = fs.existsSync(bPath);
-    const pFiles = pExists ? fs.readdirSync(pPath) : [];
-    const bFiles = bExists ? fs.readdirSync(bPath) : [];
+    
+    // Test persistent path
+    const persistentRoot = '/home/u447214693/domains/monikaopticals.com/uploads';
+    const persistentProducts = path.join(persistentRoot, 'products');
+    let persistentWritable = false;
+    let persistentExists = false;
+    let persistentProductsCount = 0;
+    
+    if (fs.existsSync('/home/u447214693/domains/monikaopticals.com')) {
+      persistentExists = true;
+      try {
+        if (!fs.existsSync(persistentRoot)) {
+          fs.mkdirSync(persistentRoot, { recursive: true });
+        }
+        if (!fs.existsSync(persistentProducts)) {
+          fs.mkdirSync(persistentProducts, { recursive: true });
+        }
+        // Try to write a test file
+        const testFile = path.join(persistentRoot, 'write-test.txt');
+        fs.writeFileSync(testFile, 'hello');
+        fs.unlinkSync(testFile);
+        persistentWritable = true;
+        persistentProductsCount = fs.readdirSync(persistentProducts).length;
+      } catch (err) {
+        persistentWritable = 'error: ' + err.message;
+      }
+    }
+
     res.json({
       dirname: __dirname,
       productsPath: pPath,
-      productsExists: pExists,
-      bannersExists: bExists,
-      productsCount: pFiles.length,
-      bannersCount: bFiles.length,
-      sampleProducts: pFiles.slice(0, 10),
-      sampleBanners: bFiles.slice(0, 10)
+      productsExists: fs.existsSync(pPath),
+      productsCount: fs.existsSync(pPath) ? fs.readdirSync(pPath).length : 0,
+      persistentExists,
+      persistentRoot,
+      persistentWritable,
+      persistentProductsCount
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
