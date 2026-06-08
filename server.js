@@ -125,6 +125,15 @@ app.get('/api/debug-uploads', (req, res) => {
   }
 });
 
+app.get('/api/clear-products', async (req, res) => {
+  try {
+    await pool.query("DELETE FROM products WHERE id != '_'");
+    res.send("Successfully cleared all products from database!");
+  } catch (err) {
+    res.status(500).send("Error clearing products: " + err.message);
+  }
+});
+
 /* ── Multer Storage (Local Disk) ── */
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
