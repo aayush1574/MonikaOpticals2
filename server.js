@@ -74,6 +74,29 @@ app.get('/api/debug-db', async (req, res) => {
   }
 });
 
+app.get('/api/debug-uploads', (req, res) => {
+  try {
+    const pPath = path.join(__dirname, 'uploads', 'products');
+    const bPath = path.join(__dirname, 'uploads', 'banners');
+    const pExists = fs.existsSync(pPath);
+    const bExists = fs.existsSync(bPath);
+    const pFiles = pExists ? fs.readdirSync(pPath) : [];
+    const bFiles = bExists ? fs.readdirSync(bPath) : [];
+    res.json({
+      dirname: __dirname,
+      productsPath: pPath,
+      productsExists: pExists,
+      bannersExists: bExists,
+      productsCount: pFiles.length,
+      bannersCount: bFiles.length,
+      sampleProducts: pFiles.slice(0, 10),
+      sampleBanners: bFiles.slice(0, 10)
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 /* ── Multer Storage (Local Disk) ── */
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
