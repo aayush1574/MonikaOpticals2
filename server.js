@@ -140,14 +140,6 @@ app.get('/api/debug-db', async (req, res) => {
   }
 });
 
-app.get('/api/clear-products', async (req, res) => {
-  try {
-    await pool.query("DELETE FROM products WHERE id != '_'");
-    res.send("Successfully cleared all products from database!");
-  } catch (err) {
-    res.status(500).send("Error clearing products: " + err.message);
-  }
-});
 
 
 
