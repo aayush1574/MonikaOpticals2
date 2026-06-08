@@ -49,16 +49,12 @@ if (!fs.existsSync(uploadDir)) {
 }
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+/* Serve Frontend Static Files */
+app.use(express.static(__dirname));
+
 app.use((req, res, next) => {
   console.log(`  → ${req.method} ${req.path}`);
   next();
-});
-
-app.get('/', (req, res) => {
-  res.json({ 
-    message: 'Backend is running with MySQL',
-    debug: '/api/debug-db'
-  });
 });
 
 /* ── Debug Route ── */

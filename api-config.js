@@ -3,7 +3,8 @@
  * Pure ES5 version for maximum compatibility.
  */
 var API_CONFIG = (function() {
-  var BACKEND_URL = 'https://monikaopticals2-nr5i.onrender.com';
+  // Dynamically use the current domain since frontend and backend are now hosted together
+  var BACKEND_URL = typeof window !== 'undefined' ? window.location.origin : '';
 
   return {
     BASE_URL: BACKEND_URL,
