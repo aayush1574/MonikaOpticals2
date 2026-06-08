@@ -76,7 +76,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function renderProducts(cat) {
-    const filtered = cat === 'all' ? activeProducts : activeProducts.filter(p => p.category === cat);
+    const filtered = cat === 'all' ? activeProducts : activeProducts.filter(p => {
+      const pCat = p.category ? p.category.toString().trim().toLowerCase() : '';
+      return pCat === cat.toLowerCase();
+    });
 
     grid.innerHTML = '';
 
