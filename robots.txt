@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /admin.html
+Disallow: /admin.js
+Disallow: /debug.js
+Disallow: /bulk-server.js
+Disallow: /bulk-upload.html
+
+Sitemap: https://monikaopticals.com/sitemap.xml
