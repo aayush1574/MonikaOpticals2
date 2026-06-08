@@ -7,8 +7,10 @@ const app = express();
 const PORT = 3001;
 
 const GLASSES_DIR = 'C:/Users/aayus/OneDrive/Desktop/Glasses';
+const CONFIG_FILE = path.join(__dirname, 'glasses-config.json');
 
 app.use(cors());
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static(__dirname)); // To serve bulk-upload.html
 app.use('/glasses-images', express.static(GLASSES_DIR));
 
@@ -48,7 +50,26 @@ app.get('/api/scan', (req, res) => {
       groups.push(currentGroup.map(f => f.filename));
     }
 
-    res.json({ ok: true, groups });
+    // Read saved configuration
+    let config = {};
+    if (fs.existsSync(CONFIG_FILE)) {
+      try {
+        config = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+      } catch (e) {
+        console.error('Error parsing config file:', e.message);
+      }
+    }
+
+    res.json({ ok: true, groups, config });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/save-config', (req, res) => {
+  try {
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(req.body, null, 2), 'utf8');
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }

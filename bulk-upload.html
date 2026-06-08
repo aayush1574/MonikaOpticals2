@@ -30,7 +30,10 @@
       <h2 style="margin:0" id="total-groups">Scanning images...</h2>
       <p style="margin:5px 0 0 0; color:#666;">Set the category for each pair of glasses below, then upload all at once.</p>
     </div>
-    <button id="upload-btn" class="btn" disabled>Upload All to Live Site</button>
+    <div style="display:flex; gap:10px;">
+      <button id="save-btn" class="btn" style="background:#555;" onclick="saveConfig()">Save Progress</button>
+      <button id="upload-btn" class="btn" disabled>Upload All to Live Site</button>
+    </div>
   </div>
   
   <div class="progress-bar" id="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
@@ -40,6 +43,7 @@
   <script>
     const LIVE_API = 'https://monikaopticals.com/api/products';
     let globalGroups = [];
+    let globalConfig = {};
 
     async function loadGroups() {
       try {
@@ -47,6 +51,7 @@
         const data = await res.json();
         if (data.ok) {
           globalGroups = data.groups;
+          globalConfig = data.config || {};
           document.getElementById('total-groups').textContent = `Found ${globalGroups.length} Products`;
           renderUI();
           document.getElementById('upload-btn').disabled = false;
@@ -61,7 +66,17 @@
     function renderUI() {
       const list = document.getElementById('product-list');
       list.innerHTML = globalGroups.map((group, index) => {
-        
+        const firstImg = group[0];
+        const saved = globalConfig[firstImg] || {};
+
+        const cat = saved.category || 'sunglasses';
+        const name = saved.name || `Premium Eyewear ${index + 1}`;
+        const brand = saved.brand || 'Monika Collection';
+        const price = saved.price || '1499';
+        const isChecked = saved.checked !== false;
+        const statusText = saved.uploaded ? '✔ Uploaded!' : 'Ready';
+        const statusColor = saved.uploaded ? 'green' : '';
+
         let imagesHtml = '';
         group.forEach((img, imgIndex) => {
           imagesHtml += `<div style="display:inline-block; position:relative; margin-right:10px;">
@@ -70,11 +85,13 @@
                          </div>`;
         });
 
+        const isSel = (val) => val === cat ? 'selected' : '';
+
         return `
           <div class="product-row" id="row-${index}">
             <div style="display:flex; flex-direction:column; align-items:center; gap:10px;">
               <div style="font-weight:bold; color:#888;">#${index + 1}</div>
-              <input type="checkbox" id="check-${index}" checked style="width: 20px; height: 20px; cursor: pointer;">
+              <input type="checkbox" id="check-${index}" ${isChecked ? 'checked' : ''} style="width: 20px; height: 20px; cursor: pointer;">
               ${index > 0 ? `<button onclick="mergeUp(${index})" title="Merge with above" style="background:none; border:none; cursor:pointer; font-size:18px;">🔗</button>` : ''}
             </div>
             <div class="product-images">${imagesHtml}</div>
@@ -82,34 +99,76 @@
               <div>
                 <label>Category *</label>
                 <select id="cat-${index}" style="width:100%; border-color:#8B4513; border-width:2px; font-weight:bold; color:#8B4513;">
-                  <option value="sunglasses">Sunglasses</option>
-                  <option value="reading">Reading Glasses</option>
-                  <option value="computer">Computer Glasses</option>
-                  <option value="sports">Sports Eyewear</option>
-                  <option value="kids">Kids Eyewear</option>
-                  <option value="contacts">Contact Lenses</option>
+                  <option value="sunglasses" ${isSel('sunglasses')}>Sunglasses</option>
+                  <option value="reading" ${isSel('reading')}>Reading Glasses</option>
+                  <option value="computer" ${isSel('computer')}>Computer Glasses</option>
+                  <option value="sports" ${isSel('sports')}>Sports Eyewear</option>
+                  <option value="kids" ${isSel('kids')}>Kids Eyewear</option>
+                  <option value="contacts" ${isSel('contacts')}>Contact Lenses</option>
                 </select>
               </div>
               <div>
                 <label>Name</label>
-                <input type="text" id="name-${index}" value="Premium Eyewear ${index + 1}" style="width:100%">
+                <input type="text" id="name-${index}" value="${name}" style="width:100%">
               </div>
               <div>
                 <label>Brand</label>
-                <input type="text" id="brand-${index}" value="Monika Collection" style="width:100%">
+                <input type="text" id="brand-${index}" value="${brand}" style="width:100%">
               </div>
               <div>
                 <label>Price (₹)</label>
-                <input type="text" id="price-${index}" value="1499" style="width:100%">
+                <input type="text" id="price-${index}" value="${price}" style="width:100%">
               </div>
-              <div class="status" id="status-${index}">Ready</div>
+              <div class="status" id="status-${index}" style="color:${statusColor}">${statusText}</div>
             </div>
           </div>
         `;
       }).join('');
     }
 
+    function syncFormStateToConfig() {
+      for (let i = 0; i < globalGroups.length; i++) {
+        const firstImg = globalGroups[i][0];
+        if (!firstImg) continue;
+
+        const catEl = document.getElementById(`cat-${i}`);
+        const nameEl = document.getElementById(`name-${i}`);
+        const brandEl = document.getElementById(`brand-${i}`);
+        const priceEl = document.getElementById(`price-${i}`);
+        const checkEl = document.getElementById(`check-${i}`);
+        const statusEl = document.getElementById(`status-${i}`);
+
+        globalConfig[firstImg] = {
+          category: catEl ? catEl.value : (globalConfig[firstImg]?.category || 'sunglasses'),
+          name: nameEl ? nameEl.value : (globalConfig[firstImg]?.name || `Premium Eyewear ${i + 1}`),
+          brand: brandEl ? brandEl.value : (globalConfig[firstImg]?.brand || 'Monika Collection'),
+          price: priceEl ? priceEl.value : (globalConfig[firstImg]?.price || '1499'),
+          checked: checkEl ? checkEl.checked : (globalConfig[firstImg]?.checked !== false),
+          uploaded: statusEl ? (statusEl.textContent === '✔ Uploaded!') : (globalConfig[firstImg]?.uploaded || false)
+        };
+      }
+    }
+
+    async function saveConfig(silent = false) {
+      syncFormStateToConfig();
+      try {
+        const res = await fetch('/api/save-config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(globalConfig)
+        });
+        if (res.ok) {
+          if (!silent) alert('Progress saved successfully!');
+        } else {
+          if (!silent) alert('Failed to save config.');
+        }
+      } catch (err) {
+        if (!silent) alert('Error saving config: ' + err.message);
+      }
+    }
+
     window.splitGroup = function(groupIndex, imageIndex) {
+      syncFormStateToConfig();
       const group = globalGroups[groupIndex];
       const firstPart = group.slice(0, imageIndex);
       const secondPart = group.slice(imageIndex);
@@ -119,6 +178,7 @@
 
     window.mergeUp = function(groupIndex) {
       if (groupIndex === 0) return;
+      syncFormStateToConfig();
       const currentGroup = globalGroups[groupIndex];
       globalGroups[groupIndex - 1] = globalGroups[groupIndex - 1].concat(currentGroup);
       globalGroups.splice(groupIndex, 1);
@@ -171,6 +231,7 @@
             statusEl.textContent = '✔ Uploaded!';
             statusEl.style.color = 'green';
             document.getElementById(`check-${i}`).checked = false; // Uncheck so we don't double upload
+            await saveConfig(true); // Auto-save silently
           } else {
             throw new Error(result.error || 'Failed');
           }
