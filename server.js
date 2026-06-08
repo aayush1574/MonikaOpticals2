@@ -72,7 +72,10 @@ if (fs.existsSync('/home/u447214693/domains/monikaopticals.com')) {
     }
   } catch (err) {
     console.error('  ⚠️ Symlink creation failed:', err.message);
+    global.symlinkError = err.message;
   }
+} else {
+  global.symlinkError = 'Not on Hostinger';
 }
 
 app.use('/uploads', express.static(uploadDir, {
@@ -133,7 +136,8 @@ app.get('/api/debug-db', async (req, res) => {
       isSymlink,
       symlinkTarget,
       persistentFilesCount: persistentFiles.length,
-      samplePersistentFiles: persistentFiles.slice(0, 10)
+      samplePersistentFiles: persistentFiles.slice(0, 10),
+      symlinkError: global.symlinkError || 'None'
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
