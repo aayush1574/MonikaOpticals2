@@ -46,11 +46,15 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.set('json spaces', 2);
 
 /* Serve Uploaded Files */
-const uploadDir = path.join(__dirname, 'uploads');
+const HOSTINGER_PERSISTENT_DIR = '/home/u447214693/domains/monikaopticals.com/uploads';
+const uploadDir = fs.existsSync('/home/u447214693/domains/monikaopticals.com')
+  ? HOSTINGER_PERSISTENT_DIR
+  : path.join(__dirname, 'uploads');
+
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
-app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
+app.use('/uploads', express.static(uploadDir, {
   maxAge: '7d'
 }));
 
@@ -125,11 +129,8 @@ app.get('/api/debug-uploads', (req, res) => {
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     // Define folders for products vs banners based on route
-    let folder = 'uploads/';
-    if (req.path.includes('banners')) folder += 'banners/';
-    else folder += 'products/';
-    
-    const fullPath = path.join(__dirname, folder);
+    let subfolder = req.path.includes('banners') ? 'banners' : 'products';
+    const fullPath = path.join(uploadDir, subfolder);
     if (!fs.existsSync(fullPath)) {
       fs.mkdirSync(fullPath, { recursive: true });
     }
