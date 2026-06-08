@@ -102,7 +102,7 @@ const upload = multer({
 /* Helper to get public URL for local files */
 function getPublicUrl(req, file) {
   let folder = req.path.includes('banners') ? 'banners' : 'products';
-  return `${req.protocol}://${req.get('host')}/uploads/${folder}/${file.filename}`;
+  return `uploads/${folder}/${file.filename}`;
 }
 
 /* ═══════════════════════════════════════════════════════════

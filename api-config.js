@@ -14,9 +14,12 @@ var API_CONFIG = (function() {
     },
     imageUrl: function(src) {
       if (!src) return '';
-      // If it's already a full URL or data URI, return as is
-      if (src.indexOf('http://') === 0 || 
-          src.indexOf('https://') === 0 || 
+      // Force HTTPS for mixed content issues on Hostinger
+      if (src.indexOf('http://') === 0) {
+        src = src.replace('http://', 'https://');
+      }
+      
+      if (src.indexOf('https://') === 0 || 
           src.indexOf('data:') === 0 || 
           src.indexOf('images/') === 0) {
         return src;
