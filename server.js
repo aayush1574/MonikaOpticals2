@@ -112,7 +112,22 @@ function getPublicUrl(req, file) {
 app.get('/api/products', async (req, res) => {
   try {
     const [rows] = await pool.query('SELECT * FROM products ORDER BY created_at DESC');
-    res.json(rows);
+    const parsedRows = rows.map(r => {
+      let features = [];
+      let colors = [];
+      let images = [];
+      try { features = typeof r.features === 'string' ? JSON.parse(r.features) : r.features; } catch(e) {}
+      try { colors = typeof r.colors === 'string' ? JSON.parse(r.colors) : r.colors; } catch(e) {}
+      try { images = typeof r.images === 'string' ? JSON.parse(r.images) : r.images; } catch(e) {}
+      return {
+        ...r,
+        features: features || [],
+        colors: colors || [],
+        images: images || [],
+        visible: r.visible === 1 || r.visible === true || r.visible === 'true'
+      };
+    });
+    res.json(parsedRows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
