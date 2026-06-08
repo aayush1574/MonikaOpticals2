@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Bulk Image Categorizer</title>
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 20px; background: #f5f5f5; color: #333; }
+    h1 { text-align: center; }
+    .header-bar { display: flex; justify-content: space-between; align-items: center; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; position: sticky; top: 10px; z-index: 100; }
+    .btn { padding: 12px 24px; background: #8B4513; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 16px; }
+    .btn:hover { background: #A0522D; }
+    .btn:disabled { background: #ccc; cursor: not-allowed; }
+    .product-row { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; display: flex; gap: 20px; align-items: center; }
+    .product-images { display: flex; gap: 10px; overflow-x: auto; flex: 1; padding-bottom: 10px; }
+    .product-images img { height: 120px; border-radius: 4px; object-fit: cover; }
+    .product-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 400px; flex-shrink: 0; }
+    .product-form select, .product-form input { padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+    .product-form label { font-size: 12px; font-weight: bold; color: #666; margin-bottom: 2px; display: block; }
+    .status { font-weight: bold; color: green; font-size: 14px; grid-column: span 2; text-align: right; }
+    .error { color: red; }
+    .progress-bar { width: 100%; height: 8px; background: #eee; border-radius: 4px; overflow: hidden; margin-top: 10px; display: none; }
+    .progress-fill { height: 100%; background: #4CAF50; width: 0%; transition: width 0.3s; }
+  </style>
+</head>
+<body>
+
+  <h1>Bulk Glasses Categorizer</h1>
+  <div class="header-bar">
+    <div>
+      <h2 style="margin:0" id="total-groups">Scanning images...</h2>
+      <p style="margin:5px 0 0 0; color:#666;">Set the category for each pair of glasses below, then upload all at once.</p>
+    </div>
+    <button id="upload-btn" class="btn" disabled>Upload All to Live Site</button>
+  </div>
+  
+  <div class="progress-bar" id="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+
+  <div id="product-list"></div>
+
+  <script>
+    const LIVE_API = 'https://monikaopticals.com/api/products';
+    let globalGroups = [];
+
+    async function loadGroups() {
+      try {
+        const res = await fetch('/api/scan');
+        const data = await res.json();
+        if (data.ok) {
+          globalGroups = data.groups;
+          document.getElementById('total-groups').textContent = `Found ${globalGroups.length} Products`;
+          renderUI();
+          document.getElementById('upload-btn').disabled = false;
+        } else {
+          alert('Error scanning: ' + data.error);
+        }
+      } catch (err) {
+        alert('Error fetching scan data: ' + err.message);
+      }
+    }
+
+    function renderUI() {
+      const list = document.getElementById('product-list');
+      list.innerHTML = globalGroups.map((group, index) => {
+        
+        let imagesHtml = '';
+        group.forEach((img, imgIndex) => {
+          imagesHtml += `<div style="display:inline-block; position:relative; margin-right:10px;">
+                           <img src="/glasses-images/${img}" loading="lazy" />
+                           ${imgIndex > 0 ? `<button title="Split product here" onclick="splitGroup(${index}, ${imgIndex})" style="position:absolute; left:-15px; top:50%; transform:translateY(-50%); background:white; border:1px solid #ccc; border-radius:50%; cursor:pointer; z-index:10;">✂️</button>` : ''}
+                         </div>`;
+        });
+
+        return `
+          <div class="product-row" id="row-${index}">
+            <div style="display:flex; flex-direction:column; align-items:center; gap:10px;">
+              <div style="font-weight:bold; color:#888;">#${index + 1}</div>
+              <input type="checkbox" id="check-${index}" checked style="width: 20px; height: 20px; cursor: pointer;">
+              ${index > 0 ? `<button onclick="mergeUp(${index})" title="Merge with above" style="background:none; border:none; cursor:pointer; font-size:18px;">🔗</button>` : ''}
+            </div>
+            <div class="product-images">${imagesHtml}</div>
+            <div class="product-form">
+              <div>
+                <label>Category *</label>
+                <select id="cat-${index}" style="width:100%; border-color:#8B4513; border-width:2px; font-weight:bold; color:#8B4513;">
+                  <option value="sunglasses">Sunglasses</option>
+                  <option value="reading">Reading Glasses</option>
+                  <option value="computer">Computer Glasses</option>
+                  <option value="sports">Sports Eyewear</option>
+                  <option value="kids">Kids Eyewear</option>
+                  <option value="contacts">Contact Lenses</option>
+                </select>
+              </div>
+              <div>
+                <label>Name</label>
+                <input type="text" id="name-${index}" value="Premium Eyewear ${index + 1}" style="width:100%">
+              </div>
+              <div>
+                <label>Brand</label>
+                <input type="text" id="brand-${index}" value="Monika Collection" style="width:100%">
+              </div>
+              <div>
+                <label>Price (₹)</label>
+                <input type="text" id="price-${index}" value="1499" style="width:100%">
+              </div>
+              <div class="status" id="status-${index}">Ready</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    window.splitGroup = function(groupIndex, imageIndex) {
+      const group = globalGroups[groupIndex];
+      const firstPart = group.slice(0, imageIndex);
+      const secondPart = group.slice(imageIndex);
+      globalGroups.splice(groupIndex, 1, firstPart, secondPart);
+      renderUI();
+    };
+
+    window.mergeUp = function(groupIndex) {
+      if (groupIndex === 0) return;
+      const currentGroup = globalGroups[groupIndex];
+      globalGroups[groupIndex - 1] = globalGroups[groupIndex - 1].concat(currentGroup);
+      globalGroups.splice(groupIndex, 1);
+      renderUI();
+    };
+
+    async function fetchImageBlob(filename) {
+      const res = await fetch(`/glasses-images/${filename}`);
+      return await res.blob();
+    }
+
+    document.getElementById('upload-btn').addEventListener('click', async () => {
+      const btn = document.getElementById('upload-btn');
+      btn.disabled = true;
+      btn.textContent = 'Uploading... Please wait';
+      document.getElementById('progress-bar').style.display = 'block';
+
+      const indicesToUpload = [];
+      for (let i = 0; i < globalGroups.length; i++) {
+        if (document.getElementById(`check-${i}`).checked) indicesToUpload.push(i);
+      }
+
+      let completed = 0;
+
+      for (let i of indicesToUpload) {
+        const statusEl = document.getElementById(`status-${i}`);
+        statusEl.textContent = 'Uploading...';
+        statusEl.style.color = '#8B4513';
+        
+        try {
+          const formData = new FormData();
+          formData.append('name', document.getElementById(`name-${i}`).value);
+          formData.append('brand', document.getElementById(`brand-${i}`).value);
+          formData.append('category', document.getElementById(`cat-${i}`).value);
+          formData.append('price', '₹' + document.getElementById(`price-${i}`).value);
+          formData.append('badge', 'New Arrival');
+          formData.append('features', JSON.stringify(['UV Protection', 'Anti-Glare', 'Premium Frame', 'Lightweight']));
+          formData.append('colors', JSON.stringify(['#1A1A1A', '#C0C0C0'])); // Default black/silver
+
+          // Fetch blobs and append
+          for (let imgFilename of globalGroups[i]) {
+            const blob = await fetchImageBlob(imgFilename);
+            formData.append('images', blob, imgFilename);
+          }
+
+          const res = await fetch(LIVE_API, { method: 'POST', body: formData });
+          const result = await res.json();
+
+          if (result.ok) {
+            statusEl.textContent = '✔ Uploaded!';
+            statusEl.style.color = 'green';
+            document.getElementById(`check-${i}`).checked = false; // Uncheck so we don't double upload
+          } else {
+            throw new Error(result.error || 'Failed');
+          }
+        } catch (err) {
+          statusEl.textContent = '❌ Error: ' + err.message;
+          statusEl.className = 'status error';
+        }
+
+        completed++;
+        document.getElementById('progress-fill').style.width = (completed / indicesToUpload.length * 100) + '%';
+      }
+
+      btn.textContent = 'All Done!';
+    });
+
+    // Start
+    loadGroups();
+  </script>
+</body>
+</html>
