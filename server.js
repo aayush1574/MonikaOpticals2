@@ -139,7 +139,11 @@ app.get('/api/debug-db', async (req, res) => {
     let isSymlink = false;
     let symlinkTarget = '';
     let persistentFiles = [];
+    let dbCount = -1;
     try {
+      const [countRows] = await pool.query('SELECT COUNT(*) AS count FROM products WHERE id != "_"');
+      dbCount = countRows[0].count;
+      
       linkExists = fs.existsSync(targetLink);
       const lstat = fs.lstatSync(targetLink);
       isSymlink = lstat.isSymbolicLink();
@@ -162,6 +166,7 @@ app.get('/api/debug-db', async (req, res) => {
       symlinkTarget,
       persistentFilesCount: persistentFiles.length,
       samplePersistentFiles: persistentFiles.slice(0, 10),
+      dbCount,
       symlinkError: global.symlinkError || 'None'
     });
   } catch (err) {
