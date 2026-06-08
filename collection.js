@@ -113,7 +113,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         ? `<span class="product-card__badge">${product.badge}</span>`
         : '';
 
-      const featuresHTML = product.features
+      const feats = Array.isArray(product.features) ? product.features : [];
+      const featuresHTML = feats
         .map(f => `<span class="product-card__tag">${f}</span>`)
         .join('');
 
@@ -174,19 +175,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         </div>
       `;
 
-      // Dot click handlers for image switching
-      if (imgs.length > 1) {
-        const dotsWrap = card.querySelector('.product-card__dots');
-        const imgEl = card.querySelector('.product-card__image');
-        dotsWrap.addEventListener('click', (e) => {
-          const dot = e.target.closest('.product-card__dot');
-          if (!dot) return;
-          const idx = parseInt(dot.dataset.dot);
-          imgEl.src = imgs[idx];
-          dotsWrap.querySelectorAll('.product-card__dot').forEach(d => d.classList.remove('active'));
-          dot.classList.add('active');
-        });
-      }
+      // Image gallery is now handled by scroll-track + scrollNextImage()
 
       grid.appendChild(card);
     });
