@@ -55,6 +55,26 @@ const uploadDir = fs.existsSync('/home/u447214693/domains/monikaopticals.com')
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
+
+// Auto-heal symlink in production to resolve Apache/Nginx static intercept issues
+if (fs.existsSync('/home/u447214693/domains/monikaopticals.com')) {
+  const targetLink = path.join(__dirname, 'uploads');
+  try {
+    if (fs.existsSync(targetLink)) {
+      const lstat = fs.lstatSync(targetLink);
+      if (!lstat.isSymbolicLink()) {
+        fs.rmSync(targetLink, { recursive: true, force: true });
+      }
+    }
+    if (!fs.existsSync(targetLink)) {
+      fs.symlinkSync(HOSTINGER_PERSISTENT_DIR, targetLink, 'dir');
+      console.log('  🔗 Restored symlink from public_html/uploads to persistent uploads folder');
+    }
+  } catch (err) {
+    console.error('  ⚠️ Symlink creation failed:', err.message);
+  }
+}
+
 app.use('/uploads', express.static(uploadDir, {
   maxAge: '7d'
 }));
@@ -84,7 +104,29 @@ app.use((req, res, next) => {
 app.get('/api/debug-db', async (req, res) => {
   try {
     const [rows] = await pool.query('SELECT 1 + 1 AS solution');
-    res.json({ status: 'OK', message: 'Database connection successful', testQuery: rows[0].solution });
+    
+    // Check symlink status
+    const targetLink = path.join(__dirname, 'uploads');
+    let linkExists = false;
+    let isSymlink = false;
+    let symlinkTarget = '';
+    try {
+      linkExists = fs.existsSync(targetLink);
+      const lstat = fs.lstatSync(targetLink);
+      isSymlink = lstat.isSymbolicLink();
+      if (isSymlink) {
+        symlinkTarget = fs.readlinkSync(targetLink);
+      }
+    } catch (e) {}
+
+    res.json({ 
+      status: 'OK', 
+      message: 'Database connection successful', 
+      testQuery: rows[0].solution,
+      linkExists,
+      isSymlink,
+      symlinkTarget
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
