@@ -170,7 +170,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (heroGallery) {
     // Load banner images from persistent backend API
     try {
-      const res = await fetch(API_CONFIG.api('/api/banners'));
+      const res = await fetch(API_CONFIG.api('/api/banners?t=' + Date.now()));
       if (res.ok) {
         const banners = await res.json();
         const visibleBanners = banners.filter(b => b.visible !== false);
@@ -279,7 +279,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const latestGrid = document.getElementById('latest-products-grid');
   if (latestGrid) {
     try {
-      const res = await fetch(API_CONFIG.api('/api/products'));
+      const res = await fetch(API_CONFIG.api('/api/products?t=' + Date.now()));
       if (res.ok) {
         let products = await res.json();
         products = products.filter(p => p.visible !== false).slice(0, 4);

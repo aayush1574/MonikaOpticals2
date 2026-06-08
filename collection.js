@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Load products ONLY from the backend API (admin-managed)
   let activeProducts = [];
   try {
-    const res = await fetch(API_CONFIG.api('/api/products'));
+    const res = await fetch(API_CONFIG.api('/api/products?t=' + Date.now()));
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data)) activeProducts = data;
