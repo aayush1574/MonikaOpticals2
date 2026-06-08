@@ -12,6 +12,7 @@ const mysql = require('mysql2/promise');
 const path = require('path');
 const fs = require('fs');
 const compression = require('compression');
+const Jimp = require('jimp');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -58,9 +59,20 @@ app.use('/uploads', express.static(uploadDir, {
   maxAge: '7d'
 }));
 
-/* Serve Frontend Static Files */
+/* Serve Frontend Static Files with high-performance Cache-Control rules */
 app.use(express.static(__dirname, {
-  maxAge: '1h' // keep html relatively fresh but cache assets
+  maxAge: '1d',
+  setHeaders: function (res, filePath) {
+    if (filePath.endsWith('.html')) {
+      // Do not cache HTML files to ensure updates are instant
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    } else if (filePath.match(/\.(css|js|woff2?|svg|png|jpg|jpeg|gif)$/)) {
+      // Cache assets for 1 year
+      res.setHeader('Cache-Control', 'public, max-age=31536000');
+    }
+  }
 }));
 
 app.use((req, res, next) => {
@@ -108,6 +120,31 @@ function getPublicUrl(req, file) {
   return `uploads/${folder}/${file.filename}`;
 }
 
+/* Helper to compress uploaded files in place using Jimp */
+async function compressUploadedFiles(files, req) {
+  const uploadedImages = [];
+  for (const file of files) {
+    const targetUrl = getPublicUrl(req, file);
+    const subfolder = req.path.includes('banners') ? 'banners' : 'products';
+    const absolutePath = path.join(uploadDir, subfolder, file.filename);
+    
+    try {
+      const image = await Jimp.read(absolutePath);
+      // Resize product images to maximum width of 800px to ensure quick loading
+      if (image.getWidth() > 800) {
+        image.resize(800, Jimp.AUTO);
+      }
+      // Compress to 75% quality (standard compression for fast loading)
+      await image.quality(75).writeAsync(absolutePath);
+      console.log(`  ⚡ Jimp: Compressed ${file.filename} successfully`);
+    } catch (err) {
+      console.error(`  ⚠️ Jimp Compression failed for ${file.filename}:`, err.message);
+    }
+    uploadedImages.push(targetUrl);
+  }
+  return uploadedImages;
+}
+
 /* ═══════════════════════════════════════════════════════════
    PRODUCT API
    ═══════════════════════════════════════════════════════════ */
@@ -141,7 +178,7 @@ app.post('/api/products', upload.array('images', 6), async (req, res) => {
     const body = req.body;
     const files = req.files || [];
     
-    const uploadedImages = files.map(file => getPublicUrl(req, file));
+    const uploadedImages = await compressUploadedFiles(files, req);
     
     let existingImages = [];
     if (body.existingImages) {
@@ -184,7 +221,7 @@ app.put('/api/products/:id', upload.array('images', 6), async (req, res) => {
   try {
     const body = req.body;
     const files = req.files || [];
-    const uploadedImages = files.map(file => getPublicUrl(req, file));
+    const uploadedImages = await compressUploadedFiles(files, req);
 
     let existingImages = [];
     if (body.existingImages) {
@@ -287,7 +324,19 @@ app.post('/api/banners', upload.single('image'), async (req, res) => {
   try {
     let imageSrc = '';
     if (req.file) {
-      imageSrc = getPublicUrl(req, file);
+      // Compress banner
+      try {
+        const absolutePath = path.join(uploadDir, 'banners', req.file.filename);
+        const image = await Jimp.read(absolutePath);
+        if (image.getWidth() > 1600) {
+          image.resize(1600, Jimp.AUTO);
+        }
+        await image.quality(75).writeAsync(absolutePath);
+        console.log(`  ⚡ Jimp: Compressed banner ${req.file.filename} successfully`);
+      } catch (err) {
+        console.error('  ⚠️ Jimp Banner Compression failed:', err.message);
+      }
+      imageSrc = getPublicUrl(req, req.file);
     } else if (req.body.src) {
       imageSrc = req.body.src;
     }
