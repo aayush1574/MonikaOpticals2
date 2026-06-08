@@ -110,12 +110,18 @@ app.get('/api/debug-db', async (req, res) => {
     let linkExists = false;
     let isSymlink = false;
     let symlinkTarget = '';
+    let persistentFiles = [];
     try {
       linkExists = fs.existsSync(targetLink);
       const lstat = fs.lstatSync(targetLink);
       isSymlink = lstat.isSymbolicLink();
       if (isSymlink) {
         symlinkTarget = fs.readlinkSync(targetLink);
+      }
+      
+      const pPath = '/home/u447214693/domains/monikaopticals.com/uploads/products';
+      if (fs.existsSync(pPath)) {
+        persistentFiles = fs.readdirSync(pPath);
       }
     } catch (e) {}
 
@@ -125,7 +131,9 @@ app.get('/api/debug-db', async (req, res) => {
       testQuery: rows[0].solution,
       linkExists,
       isSymlink,
-      symlinkTarget
+      symlinkTarget,
+      persistentFilesCount: persistentFiles.length,
+      samplePersistentFiles: persistentFiles.slice(0, 10)
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
