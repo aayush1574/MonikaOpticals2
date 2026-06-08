@@ -78,6 +78,59 @@ app.get('/api/debug-db', async (req, res) => {
   }
 });
 
+app.get('/api/clean-stale-products', async (req, res) => {
+  try {
+    const pPath = path.join(uploadDir, 'products');
+    const files = fs.existsSync(pPath) ? fs.readdirSync(pPath) : [];
+    const fileSet = new Set(files);
+
+    const [products] = await pool.query('SELECT * FROM products');
+    let deletedCount = 0;
+    let keptCount = 0;
+
+    for (const p of products) {
+      let images = [];
+      try {
+        images = typeof p.images === 'string' ? JSON.parse(p.images) : p.images;
+      } catch (e) {
+        images = [];
+      }
+
+      if (!Array.isArray(images)) images = [];
+
+      // Check if at least one image exists on disk
+      let hasImageOnDisk = false;
+      for (const imgPath of images) {
+        if (!imgPath) continue;
+        const filename = path.basename(imgPath);
+        if (fileSet.has(filename)) {
+          hasImageOnDisk = true;
+          break;
+        }
+      }
+
+      // If it doesn't have any images on disk, delete it (except banner/logo products if any)
+      if (!hasImageOnDisk && p.id !== '_') {
+        await pool.query('DELETE FROM products WHERE id = ?', [p.id]);
+        deletedCount++;
+      } else {
+        keptCount++;
+      }
+    }
+
+    res.json({
+      status: 'OK',
+      message: 'Cleanup completed',
+      filesCount: files.length,
+      totalProductsAnalyzed: products.length,
+      deletedCount,
+      keptCount
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 /* ── Multer Storage (Local Disk) ── */
 const storage = multer.diskStorage({
