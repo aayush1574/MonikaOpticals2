@@ -169,6 +169,81 @@ app.get('/api/debug-db', async (req, res) => {
   }
 });
 
+app.get('/api/debug-symlinks', (req, res) => {
+  try {
+    const uploadsRoot = path.join(__dirname, 'uploads');
+    const pLink = path.join(uploadsRoot, 'products');
+    const bLink = path.join(uploadsRoot, 'banners');
+
+    let pLinkExists = false;
+    let pIsSymlink = false;
+    let pTarget = '';
+
+    let bLinkExists = false;
+    let bIsSymlink = false;
+    let bTarget = '';
+
+    try {
+      pLinkExists = fs.existsSync(pLink);
+      const lstat = fs.lstatSync(pLink);
+      pIsSymlink = lstat.isSymbolicLink();
+      if (pIsSymlink) pTarget = fs.readlinkSync(pLink);
+    } catch(e) {}
+
+    try {
+      bLinkExists = fs.existsSync(bLink);
+      const lstat = fs.lstatSync(bLink);
+      bIsSymlink = lstat.isSymbolicLink();
+      if (bIsSymlink) bTarget = fs.readlinkSync(bLink);
+    } catch(e) {}
+
+    // Test writing to persistent folder directly
+    const persistentProducts = '/home/u447214693/domains/monikaopticals.com/uploads/products';
+    let persistentProductsWritable = false;
+    try {
+      if (fs.existsSync(persistentProducts)) {
+        const testFile = path.join(persistentProducts, 'test-write.txt');
+        fs.writeFileSync(testFile, 'write test');
+        fs.unlinkSync(testFile);
+        persistentProductsWritable = true;
+      }
+    } catch(e) {
+      persistentProductsWritable = 'error: ' + e.message;
+    }
+
+    // Test writing to link path
+    let linkProductsWritable = false;
+    try {
+      if (fs.existsSync(pLink)) {
+        const testFile = path.join(pLink, 'test-write-link.txt');
+        fs.writeFileSync(testFile, 'link write test');
+        fs.unlinkSync(testFile);
+        linkProductsWritable = true;
+      }
+    } catch(e) {
+      linkProductsWritable = 'error: ' + e.message;
+    }
+
+    res.json({
+      __dirname,
+      uploadsRoot,
+      pLink,
+      pLinkExists,
+      pIsSymlink,
+      pTarget,
+      bLink,
+      bLinkExists,
+      bIsSymlink,
+      bTarget,
+      persistentProductsWritable,
+      linkProductsWritable,
+      symlinkError: global.symlinkError || 'None'
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 
 
