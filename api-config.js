@@ -28,6 +28,21 @@ var API_CONFIG = (function() {
       return BACKEND_URL + separator + src;
     }
   };
+
+  // Global helper for image carousel
+  window.scrollNextImage = function(wrap) {
+    const track = wrap.querySelector('.product-card__scroll-track');
+    if (!track) return;
+    const width = track.offsetWidth;
+    const maxScroll = track.scrollWidth - width;
+    // Use a small buffer to handle floating point scroll widths
+    if (track.scrollLeft + width >= maxScroll - 5) {
+      track.scrollTo({ left: 0, behavior: 'smooth' });
+    } else {
+      track.scrollTo({ left: track.scrollLeft + width, behavior: 'smooth' });
+    }
+  };
+
 })();
 
 // Ensure it's globally accessible

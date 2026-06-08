@@ -144,13 +144,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         colorsHTML += '</div>';
       }
 
+      const imgsHtml = (Array.isArray(product.images) && product.images.length > 0 ? product.images : (product.image ? [product.image] : []))
+        .map(imgSrc => `<img src="${API_CONFIG.imageUrl(imgSrc)}" alt="${product.name}" class="product-card__image" loading="lazy" />`)
+        .join('') || `<img src="" alt="No image" class="product-card__image" />`;
+
       const whatsappMsg = encodeURIComponent(`Hi, I'm interested in the ${product.name} (${product.brand}) - ${product.price}. Can I get more details?`);
 
       card.innerHTML = `
-        <div class="product-card__image-wrap">
+        <div class="product-card__image-wrap" onclick="scrollNextImage(this)">
           ${badgeHTML}
-          <img src="${primaryImg}" alt="${product.name}" class="product-card__image" loading="lazy" />
-          ${dotsHTML}
+          <div class="product-card__scroll-track">
+            ${imgsHtml}
+          </div>
         </div>
         <div class="product-card__body">
           <span class="product-card__brand">${product.brand}</span>
