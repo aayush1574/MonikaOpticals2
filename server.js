@@ -78,61 +78,6 @@ app.get('/api/debug-db', async (req, res) => {
   }
 });
 
-app.get('/api/debug-uploads', (req, res) => {
-  try {
-    const pPath = path.join(__dirname, 'uploads', 'products');
-    const bPath = path.join(__dirname, 'uploads', 'banners');
-    
-    // Test persistent path
-    const persistentRoot = '/home/u447214693/domains/monikaopticals.com/uploads';
-    const persistentProducts = path.join(persistentRoot, 'products');
-    let persistentWritable = false;
-    let persistentExists = false;
-    let persistentProductsCount = 0;
-    
-    if (fs.existsSync('/home/u447214693/domains/monikaopticals.com')) {
-      persistentExists = true;
-      try {
-        if (!fs.existsSync(persistentRoot)) {
-          fs.mkdirSync(persistentRoot, { recursive: true });
-        }
-        if (!fs.existsSync(persistentProducts)) {
-          fs.mkdirSync(persistentProducts, { recursive: true });
-        }
-        // Try to write a test file
-        const testFile = path.join(persistentRoot, 'write-test.txt');
-        fs.writeFileSync(testFile, 'hello');
-        fs.unlinkSync(testFile);
-        persistentWritable = true;
-        persistentProductsCount = fs.readdirSync(persistentProducts).length;
-      } catch (err) {
-        persistentWritable = 'error: ' + err.message;
-      }
-    }
-
-    res.json({
-      dirname: __dirname,
-      productsPath: pPath,
-      productsExists: fs.existsSync(pPath),
-      productsCount: fs.existsSync(pPath) ? fs.readdirSync(pPath).length : 0,
-      persistentExists,
-      persistentRoot,
-      persistentWritable,
-      persistentProductsCount
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.get('/api/clear-products', async (req, res) => {
-  try {
-    await pool.query("DELETE FROM products WHERE id != '_'");
-    res.send("Successfully cleared all products from database!");
-  } catch (err) {
-    res.status(500).send("Error clearing products: " + err.message);
-  }
-});
 
 /* ── Multer Storage (Local Disk) ── */
 const storage = multer.diskStorage({
