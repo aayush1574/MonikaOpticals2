@@ -47,17 +47,24 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.set('json spaces', 2);
 
 /* Serve Uploaded Files */
-const HOSTINGER_PERSISTENT_DIR = '/home/u447214693/domains/monikaopticals.com/uploads';
-const uploadDir = fs.existsSync('/home/u447214693/domains/monikaopticals.com')
-  ? HOSTINGER_PERSISTENT_DIR
-  : path.join(__dirname, 'uploads');
+let HOSTINGER_PERSISTENT_DIR = '';
+const isHostinger = __dirname.includes('domains/monikaopticals.com') || __dirname.includes('domains\\monikaopticals.com');
+
+if (isHostinger) {
+  const match = __dirname.match(/(.*domains[/\\]monikaopticals\.com)/);
+  if (match) {
+    HOSTINGER_PERSISTENT_DIR = path.join(match[1], 'uploads');
+  }
+}
+
+const uploadDir = HOSTINGER_PERSISTENT_DIR ? HOSTINGER_PERSISTENT_DIR : path.join(__dirname, 'uploads');
 
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
 // Auto-heal symlinks for products & banners subfolders in production
-if (fs.existsSync('/home/u447214693/domains/monikaopticals.com')) {
+if (HOSTINGER_PERSISTENT_DIR) {
   const uploadsRoot = path.join(__dirname, 'uploads');
   // Ensure the parent directory public_html/uploads exists
   if (!fs.existsSync(uploadsRoot)) {
@@ -159,8 +166,8 @@ app.get('/api/debug-db', async (req, res) => {
         symlinkTarget = fs.readlinkSync(targetLink);
       }
       
-      const pPath = '/home/u447214693/domains/monikaopticals.com/uploads/products';
-      if (fs.existsSync(pPath)) {
+      const pPath = HOSTINGER_PERSISTENT_DIR ? path.join(HOSTINGER_PERSISTENT_DIR, 'products') : '';
+      if (pPath && fs.existsSync(pPath)) {
         persistentFiles = fs.readdirSync(pPath);
       }
     } catch (e) {}
@@ -211,10 +218,10 @@ app.get('/api/debug-symlinks', (req, res) => {
     } catch(e) {}
 
     // Test writing to persistent folder directly
-    const persistentProducts = '/home/u447214693/domains/monikaopticals.com/uploads/products';
+    const persistentProducts = HOSTINGER_PERSISTENT_DIR ? path.join(HOSTINGER_PERSISTENT_DIR, 'products') : '';
     let persistentProductsWritable = false;
     try {
-      if (fs.existsSync(persistentProducts)) {
+      if (persistentProducts && fs.existsSync(persistentProducts)) {
         const testFile = path.join(persistentProducts, 'test-write.txt');
         fs.writeFileSync(testFile, 'write test');
         fs.unlinkSync(testFile);
