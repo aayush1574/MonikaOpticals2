@@ -324,6 +324,18 @@ async function compressUploadedFiles(files, req) {
    PRODUCT API
    ═══════════════════════════════════════════════════════════ */
 
+app.get('/api/clear-products', async (req, res) => {
+  if (req.query.code !== 'monika123') {
+    return res.status(403).json({ error: 'Unauthorized' });
+  }
+  try {
+    await pool.query("DELETE FROM products WHERE id != '_'");
+    res.json({ ok: true, message: "All products cleared successfully" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/products', async (req, res) => {
   try {
     const [rows] = await pool.query('SELECT * FROM products ORDER BY created_at DESC');
